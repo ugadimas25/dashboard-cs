@@ -46,7 +46,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<FarmData[]>([]);
   const [currentMonth, setCurrentMonth] = useState("July 2025");
 
-  const parseAndSetData = (csv: string) => {
+  const parseAndSetData = (csv: string, append: boolean = false) => {
     Papa.parse(csv, {
       complete: (results) => {
         // Map raw CSV array to object
@@ -67,19 +67,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
             certifiedAreaHa: parseInt(row[10] || "0"),
           }));
         
-        setData(parsed);
+        if (append) {
+          setData(prev => [...prev, ...parsed]);
+        } else {
+          setData(parsed);
+        }
       }
     });
   };
 
   // Initialize with dummy data
   if (data.length === 0) {
-    parseAndSetData(INITIAL_CSV);
+    parseAndSetData(INITIAL_CSV, false);
   }
 
   const uploadData = (csvContent: string, month: string) => {
     setCurrentMonth(month);
-    parseAndSetData(csvContent);
+    parseAndSetData(csvContent, true);
   };
 
   return (

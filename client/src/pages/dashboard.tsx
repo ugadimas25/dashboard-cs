@@ -66,8 +66,8 @@ export default function Dashboard() {
         uploadData(text, selectedMonth);
         setIsDialogOpen(false);
         toast({
-          title: "Data Uploaded Successfully",
-          description: `Dashboard updated with data for ${selectedMonth}`,
+          title: "Data Added Successfully",
+          description: `Data for ${selectedMonth} has been added to the dashboard summary.`,
         });
       };
       reader.readAsText(file);
@@ -81,7 +81,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Global Overview</h1>
             <p className="text-muted-foreground mt-1">
-              Data for <span className="font-semibold text-primary">{currentMonth}</span>
+              Cumulative Data Summary (Latest: <span className="font-semibold text-primary">{currentMonth}</span>)
             </p>
           </div>
           
