@@ -35,26 +35,24 @@ const INITIAL_CSV = `10002 - Community Agribusiness Partners,10002,Community Agr
 50059 - McCormick Global Ingredients Limited,50059,McCormick Global Ingredients Limited,27075,grancafe,Brazil,11/26/2025,37,,38,0,0,0,,,4,7,4,3,2,1,0,1,0`;
 
 interface DataContextType {
-  data: FarmData[];
+  monthlyData: Record<string, FarmData[]>;
   currentMonth: string;
+  availableMonths: string[];
+  setCurrentMonth: (month: string) => void;
   uploadData: (csvContent: string, month: string) => void;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<FarmData[]>([]);
+  const [monthlyData, setMonthlyData] = useState<Record<string, FarmData[]>>({});
   const [currentMonth, setCurrentMonth] = useState("July 2025");
 
-  const parseAndSetData = (csv: string, append: boolean = false) => {
+  const parseAndStore = (csv: string, month: string) => {
     Papa.parse(csv, {
       complete: (results) => {
-        // Map raw CSV array to object
-        // Assuming no header in snippet, or ignoring it if user uploads with header
-        // For the snippet provided, it's raw data rows.
-        
         const parsed: FarmData[] = results.data
-          .filter((row: any) => row.length > 5 && row[2]) // Filter empty lines
+          .filter((row: any) => row.length > 5 && row[2]) 
           .map((row: any) => ({
             partnerId: row[1],
             partnerName: row[2],
@@ -67,27 +65,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
             certifiedAreaHa: parseInt(row[10] || "0"),
           }));
         
-        if (append) {
-          setData(prev => [...prev, ...parsed]);
-        } else {
-          setData(parsed);
+        setMonthlyData(prev => ({
+          ...prev,
+          [month]: parsed
+        }));
+        
+        // Auto-switch to the new month if it's the first upload or explicitly requested
+        if (Object.keys(monthlyData).length === 0) {
+           // Initial load logic handled below
         }
       }
     });
   };
 
   // Initialize with dummy data
-  if (data.length === 0) {
-    parseAndSetData(INITIAL_CSV, false);
+  if (Object.keys(monthlyData).length === 0) {
+    parseAndStore(INITIAL_CSV, "July 2025");
   }
 
   const uploadData = (csvContent: string, month: string) => {
+    parseAndStore(csvContent, month);
     setCurrentMonth(month);
-    parseAndSetData(csvContent, true);
   };
 
+  const availableMonths = Object.keys(monthlyData).sort();
+
   return (
-    <DataContext.Provider value={{ data, currentMonth, uploadData }}>
+    <DataContext.Provider value={{ 
+      monthlyData, 
+      currentMonth, 
+      availableMonths,
+      setCurrentMonth, 
+      uploadData 
+    }}>
       {children}
     </DataContext.Provider>
   );

@@ -13,31 +13,37 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  LineChart,
+  Line
 } from "recharts";
-import { Upload, Users, Sprout, Map, Scale } from "lucide-react";
+import { Upload, Users, Sprout, Map, Scale, ChevronDown } from "lucide-react";
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default function Dashboard() {
-  const { data, currentMonth, uploadData } = useData();
+  const { monthlyData, currentMonth, availableMonths, setCurrentMonth, uploadData } = useData();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedMonth, setSelectedMonth] = useState("August 2025");
+  const [uploadMonth, setUploadMonth] = useState("August 2025");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Aggregations
-  const totalFarmers = data.reduce((acc, curr) => acc + curr.totalFarmers, 0);
-  const totalYield = data.reduce((acc, curr) => acc + curr.yieldKg, 0);
-  const totalArea = data.reduce((acc, curr) => acc + curr.certifiedAreaHa, 0);
-  const activePlots = data.reduce((acc, curr) => acc + curr.activePlots, 0);
+  // Get data for the currently selected view
+  const currentData = monthlyData[currentMonth] || [];
 
-  // Chart Data Preparation
-  const yieldByCountry = Object.values(data.reduce((acc: any, curr) => {
+  // Aggregations for current month
+  const totalFarmers = currentData.reduce((acc, curr) => acc + curr.totalFarmers, 0);
+  const totalYield = currentData.reduce((acc, curr) => acc + curr.yieldKg, 0);
+  const totalArea = currentData.reduce((acc, curr) => acc + curr.certifiedAreaHa, 0);
+  const activePlots = currentData.reduce((acc, curr) => acc + curr.activePlots, 0);
+
+  // Chart Data Preparation (Current Month)
+  const yieldByCountry = Object.values(currentData.reduce((acc: any, curr) => {
     if (!acc[curr.country]) {
       acc[curr.country] = { name: curr.country, value: 0 };
     }
@@ -45,15 +51,25 @@ export default function Dashboard() {
     return acc;
   }, {}));
 
-  const farmersByPartner = Object.values(data.reduce((acc: any, curr) => {
-    // Shorten partner name for display
+  const farmersByPartner = Object.values(currentData.reduce((acc: any, curr) => {
     const shortName = curr.partnerName.length > 15 ? curr.partnerName.substring(0, 15) + '...' : curr.partnerName;
     if (!acc[curr.partnerName]) {
       acc[curr.partnerName] = { name: shortName, value: 0 };
     }
     acc[curr.partnerName].value += curr.totalFarmers;
     return acc;
-  }, {})).sort((a: any, b: any) => b.value - a.value).slice(0, 5); // Top 5 partners
+  }, {})).sort((a: any, b: any) => b.value - a.value).slice(0, 5);
+
+  // Monthly Analytics Data (Trend)
+  const monthlyTrends = availableMonths.map(month => {
+    const monthData = monthlyData[month];
+    return {
+      name: month,
+      farmers: monthData.reduce((acc, curr) => acc + curr.totalFarmers, 0),
+      yield: monthData.reduce((acc, curr) => acc + curr.yieldKg, 0),
+      area: monthData.reduce((acc, curr) => acc + curr.certifiedAreaHa, 0)
+    };
+  });
 
   const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
@@ -63,11 +79,11 @@ export default function Dashboard() {
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;
-        uploadData(text, selectedMonth);
+        uploadData(text, uploadMonth);
         setIsDialogOpen(false);
         toast({
           title: "Data Added Successfully",
-          description: `Data for ${selectedMonth} has been added to the dashboard summary.`,
+          description: `Data for ${uploadMonth} has been uploaded.`,
         });
       };
       reader.readAsText(file);
@@ -76,54 +92,73 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-8">
+        {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Global Overview</h1>
             <p className="text-muted-foreground mt-1">
-              Cumulative Data Summary (Latest: <span className="font-semibold text-primary">{currentMonth}</span>)
+              Monthly Snapshot: <span className="font-semibold text-primary">{currentMonth}</span>
             </p>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2 shadow-lg shadow-primary/20">
-                <Upload size={18} />
-                Upload Monthly Data
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Upload Excel/CSV Data</DialogTitle>
-                <DialogDescription>
-                  Select the month and upload the corresponding file to update the dashboard.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Select Month</Label>
-                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="August 2025">August 2025</SelectItem>
-                      <SelectItem value="September 2025">September 2025</SelectItem>
-                      <SelectItem value="October 2025">October 2025</SelectItem>
-                    </SelectContent>
-                  </Select>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  {currentMonth}
+                  <ChevronDown size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {availableMonths.map(month => (
+                  <DropdownMenuItem key={month} onClick={() => setCurrentMonth(month)}>
+                    {month}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 shadow-lg shadow-primary/20">
+                  <Upload size={18} />
+                  Upload Monthly Data
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Upload Excel/CSV Data</DialogTitle>
+                  <DialogDescription>
+                    Select the month and upload the file. This will create a new monthly record.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Select Month</Label>
+                    <Select value={uploadMonth} onValueChange={setUploadMonth}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="August 2025">August 2025</SelectItem>
+                        <SelectItem value="September 2025">September 2025</SelectItem>
+                        <SelectItem value="October 2025">October 2025</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>File (CSV)</Label>
+                    <Input 
+                      type="file" 
+                      accept=".csv,.txt" 
+                      onChange={handleFileUpload}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>File (CSV)</Label>
-                  <Input 
-                    type="file" 
-                    accept=".csv,.txt" 
-                    onChange={handleFileUpload}
-                  />
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* KPI Cards */}
@@ -135,7 +170,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalFarmers.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Active across all regions</p>
+              <p className="text-xs text-muted-foreground">Active in {currentMonth}</p>
             </CardContent>
           </Card>
           <Card className="hover-elevate transition-all border-l-4 border-l-secondary">
@@ -145,7 +180,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{(totalYield / 1000).toLocaleString()} t</div>
-              <p className="text-xs text-muted-foreground">Metric tons produced</p>
+              <p className="text-xs text-muted-foreground">Metric tons in {currentMonth}</p>
             </CardContent>
           </Card>
           <Card className="hover-elevate transition-all border-l-4 border-l-chart-4">
@@ -155,7 +190,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalArea.toLocaleString()} ha</div>
-              <p className="text-xs text-muted-foreground">Hectares under management</p>
+              <p className="text-xs text-muted-foreground">Hectares in {currentMonth}</p>
             </CardContent>
           </Card>
           <Card className="hover-elevate transition-all border-l-4 border-l-chart-3">
@@ -165,18 +200,17 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{activePlots.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Plots currently cultivated</p>
+              <p className="text-xs text-muted-foreground">Plots in {currentMonth}</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts Section */}
+        {/* Charts Section (Current Month) */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          {/* Main Bar Chart */}
           <Card className="col-span-4 hover-elevate transition-all">
             <CardHeader>
-              <CardTitle>Production by Country</CardTitle>
-              <CardDescription>Yield distribution (kg) across different regions</CardDescription>
+              <CardTitle>Production by Country ({currentMonth})</CardTitle>
+              <CardDescription>Yield distribution (kg)</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={350}>
@@ -206,11 +240,10 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Pie Chart */}
           <Card className="col-span-3 hover-elevate transition-all">
             <CardHeader>
-              <CardTitle>Farmers by Partner</CardTitle>
-              <CardDescription>Top 5 partners by farmer count</CardDescription>
+              <CardTitle>Farmers by Partner ({currentMonth})</CardTitle>
+              <CardDescription>Top 5 partners</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={350}>
@@ -236,41 +269,47 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Recent Data Table Preview */}
-        <Card className="hover-elevate transition-all">
-          <CardHeader>
-            <CardTitle>Recent Entries</CardTitle>
-            <CardDescription>Latest data points from the uploaded file</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-3 rounded-l-lg">Partner</th>
-                    <th className="px-4 py-3">Country</th>
-                    <th className="px-4 py-3">Project</th>
-                    <th className="px-4 py-3">Farmers</th>
-                    <th className="px-4 py-3">Yield (kg)</th>
-                    <th className="px-4 py-3 rounded-r-lg">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {data.slice(0, 5).map((row, i) => (
-                    <tr key={i} className="hover:bg-muted/50 transition-colors">
-                      <td className="px-4 py-3 font-medium">{row.partnerName}</td>
-                      <td className="px-4 py-3">{row.country}</td>
-                      <td className="px-4 py-3"><span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-secondary/20 text-secondary-foreground">{row.projectCode}</span></td>
-                      <td className="px-4 py-3">{row.totalFarmers.toLocaleString()}</td>
-                      <td className="px-4 py-3">{row.yieldKg.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{row.date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Monthly Analytics Section */}
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">Monthly Analytic</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="hover-elevate transition-all">
+              <CardHeader>
+                <CardTitle>Yield Trend</CardTitle>
+                <CardDescription>Total production over time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={monthlyTrends}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }} />
+                    <Line type="monotone" dataKey="yield" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4, fill: "hsl(var(--primary))" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate transition-all">
+              <CardHeader>
+                <CardTitle>Farmer Growth</CardTitle>
+                <CardDescription>Total farmers over time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={monthlyTrends}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }} />
+                    <Line type="monotone" dataKey="farmers" stroke="hsl(var(--secondary))" strokeWidth={3} dot={{ r: 4, fill: "hsl(var(--secondary))" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </Layout>
   );

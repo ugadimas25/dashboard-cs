@@ -41,24 +41,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               Dashboard
             </Button>
           </Link>
-          <Link href="/analytics">
-            <Button 
-              variant={location === "/analytics" ? "secondary" : "ghost"} 
-              className="w-full justify-start gap-2"
-            >
-              <PieChart size={18} />
-              Analytics
-            </Button>
-          </Link>
-          <Link href="/sustainability">
-            <Button 
-              variant={location === "/sustainability" ? "secondary" : "ghost"} 
-              className="w-full justify-start gap-2"
-            >
-              <Sprout size={18} />
-              Sustainability
-            </Button>
-          </Link>
         </div>
       </div>
 
