@@ -22,8 +22,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, pass: string) => {
     // Mock authentication
-    if (email === "dimas.perceka@sustainit.id" && pass === "Jambrong55!!") {
-      setUser({ email, name: "Dimas Perceka" });
+    if (email === "haryadi.santoso@sustainit.id" && pass === "Jambrong55!!") {
+      setUser({ email, name: "Haryadi Santoso" });
       setLocation("/");
       return true;
     } else {
