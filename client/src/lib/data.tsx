@@ -78,10 +78,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // Initialize with dummy data
-  if (Object.keys(monthlyData).length === 0) {
-    parseAndStore(INITIAL_CSV, "July 2025");
-  }
+  useEffect(() => {
+    if (Object.keys(monthlyData).length === 0) {
+      parseAndStore(INITIAL_CSV, "July 2025");
+    }
+  }, []); // Run once on mount
 
   const uploadData = (csvContent: string, month: string) => {
     parseAndStore(csvContent, month);

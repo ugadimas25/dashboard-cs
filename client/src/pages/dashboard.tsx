@@ -1,4 +1,4 @@
-import { useData } from "@/lib/data";
+import { useData, FarmData } from "@/lib/data";
 import Layout from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ export default function Dashboard() {
   const activePlots = currentData.reduce((acc, curr) => acc + curr.activePlots, 0);
 
   // Chart Data Preparation (Current Month)
-  const yieldByCountry = Object.values(currentData.reduce((acc: any, curr) => {
+  const yieldByCountry = Object.values(currentData.reduce((acc: Record<string, { name: string; value: number }>, curr: FarmData) => {
     if (!acc[curr.country]) {
       acc[curr.country] = { name: curr.country, value: 0 };
     }
@@ -51,7 +51,7 @@ export default function Dashboard() {
     return acc;
   }, {}));
 
-  const farmersByPartner = Object.values(currentData.reduce((acc: any, curr) => {
+  const farmersByPartner = Object.values(currentData.reduce((acc: Record<string, { name: string; value: number }>, curr: FarmData) => {
     const shortName = curr.partnerName.length > 15 ? curr.partnerName.substring(0, 15) + '...' : curr.partnerName;
     if (!acc[curr.partnerName]) {
       acc[curr.partnerName] = { name: shortName, value: 0 };
@@ -61,13 +61,13 @@ export default function Dashboard() {
   }, {})).sort((a: any, b: any) => b.value - a.value).slice(0, 5);
 
   // Monthly Analytics Data (Trend)
-  const monthlyTrends = availableMonths.map(month => {
+  const monthlyTrends = availableMonths.map((month: string) => {
     const monthData = monthlyData[month];
     return {
       name: month,
-      farmers: monthData.reduce((acc, curr) => acc + curr.totalFarmers, 0),
-      yield: monthData.reduce((acc, curr) => acc + curr.yieldKg, 0),
-      area: monthData.reduce((acc, curr) => acc + curr.certifiedAreaHa, 0)
+      farmers: monthData.reduce((acc: number, curr: FarmData) => acc + curr.totalFarmers, 0),
+      yield: monthData.reduce((acc: number, curr: FarmData) => acc + curr.yieldKg, 0),
+      area: monthData.reduce((acc: number, curr: FarmData) => acc + curr.certifiedAreaHa, 0)
     };
   });
 
