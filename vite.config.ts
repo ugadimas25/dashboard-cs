@@ -8,14 +8,9 @@ import { metaImagesPlugin } from "./vite-plugin-meta-images";
 export default defineConfig({
   plugins: [
     react({
-      // Explicitly configure Fast Refresh
-      fastRefresh: true,
-      // Babel options
-      babel: {
-        plugins: []
-      }
+      jsxRuntime: 'automatic',
     }),
-    runtimeErrorOverlay(),
+    // runtimeErrorOverlay(), // Disabled: causes RefreshRuntime error
     tailwindcss(),
     metaImagesPlugin(),
     ...(process.env.NODE_ENV !== "production" &&

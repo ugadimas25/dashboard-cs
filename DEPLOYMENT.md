@@ -468,7 +468,292 @@ pm2 logs farmforce-dashboard
 
 ---
 
-## 🔍 Troubleshooting
+## � Update Aplikasi dengan Perubahan Besar (Upload Handler Baru)
+
+Panduan khusus untuk update aplikasi dengan perubahan signifikan pada CSV upload handler yang sekarang mendukung:
+- ✅ Auto-detect delimiter (comma atau semicolon)
+- ✅ CSV dengan atau tanpa header
+- ✅ Mapping kolom otomatis untuk Origin dan Orbit data
+
+### Pre-Update Checklist
+
+```bash
+# 1. Backup database terlebih dahulu (PENTING!)
+cd /var/www/farmforce
+sudo -u postgres pg_dump farmforce_db > backup_before_major_update_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. Cek aplikasi yang sedang berjalan
+pm2 status
+
+# 3. Simpan logs sebelum update
+pm2 logs farmforce-dashboard --lines 100 > logs_before_update.txt
+```
+
+### Step-by-Step Update Process
+
+#### 1. Pull Latest Changes
+
+```bash
+cd /var/www/farmforce
+
+# Stash local changes jika ada
+git stash
+
+# Pull latest code
+git pull origin main  # atau branch yang sesuai
+
+# Check what changed
+git log --oneline -10
+```
+
+#### 2. Update Dependencies
+
+```bash
+# Install/update npm packages
+npm install
+
+# Verify no vulnerabilities
+npm audit
+
+# Fix if needed
+npm audit fix
+```
+
+#### 3. Test Build Locally di Server
+
+```bash
+# Build aplikasi untuk memastikan tidak ada error
+npm run build
+
+# Jika ada error, check logs dan fix
+```
+
+#### 4. Update Database Schema (jika ada perubahan)
+
+```bash
+# Push schema changes
+npm run db:push
+
+# Verify database connection
+npm run db:push -- --verbose
+```
+
+#### 5. Restart Aplikasi dengan PM2
+
+```bash
+# Restart dengan zero-downtime
+pm2 reload farmforce-dashboard
+
+# Atau restart biasa jika reload error
+pm2 restart farmforce-dashboard
+
+# Monitor logs untuk error
+pm2 logs farmforce-dashboard --lines 50
+```
+
+#### 6. Verify Upload Functionality
+
+Setelah update, test upload dengan:
+
+1. **Test dengan CSV comma-delimited**
+   - Upload file CSV dengan delimiter comma (,)
+   - Pastikan data ter-parse dengan benar
+
+2. **Test dengan CSV semicolon-delimited**
+   - Upload file CSV dengan delimiter semicolon (;)
+   - Pastikan data ter-parse dengan benar
+
+3. **Check logs untuk delimiter detection**
+   ```bash
+   pm2 logs farmforce-dashboard | grep "Detected delimiter"
+   ```
+
+4. **Verify data di database**
+   ```bash
+   sudo -u postgres psql farmforce_db
+   
+   # Check data Origin
+   SELECT COUNT(*) FROM origin_raw WHERE summary_period >= CURRENT_DATE - INTERVAL '7 days';
+   SELECT Customer_Name, Active_Farmers, Country_Name FROM origin_raw LIMIT 5;
+   
+   # Check data Orbit
+   SELECT COUNT(*) FROM orbit_raw WHERE summary_period >= CURRENT_DATE - INTERVAL '7 days';
+   SELECT Customer_Name, Total_Farmers FROM orbit_raw LIMIT 5;
+   
+   \q
+   ```
+
+#### 7. Monitor Performance
+
+```bash
+# Monitor CPU dan Memory usage
+pm2 monit
+
+# Check application metrics
+pm2 info farmforce-dashboard
+
+# Monitor Nginx access
+sudo tail -f /var/log/nginx/access.log
+
+# Monitor application logs
+pm2 logs farmforce-dashboard --lines 100
+```
+
+### Rollback Plan (jika terjadi masalah)
+
+Jika setelah update ada masalah:
+
+#### Option 1: Rollback Code
+
+```bash
+cd /var/www/farmforce
+
+# Lihat commit sebelumnya
+git log --oneline -10
+
+# Rollback ke commit sebelumnya (ganti COMMIT_HASH dengan hash yang sesuai)
+git reset --hard COMMIT_HASH
+
+# Rebuild
+npm install
+npm run build
+
+# Restart
+pm2 restart farmforce-dashboard
+```
+
+#### Option 2: Restore Database
+
+```bash
+# Stop aplikasi
+pm2 stop farmforce-dashboard
+
+# Drop database
+sudo -u postgres psql
+DROP DATABASE farmforce_db;
+CREATE DATABASE farmforce_db;
+GRANT ALL PRIVILEGES ON DATABASE farmforce_db TO farmforce_user;
+\q
+
+# Restore dari backup
+sudo -u postgres psql farmforce_db < backup_before_major_update_YYYYMMDD_HHMMSS.sql
+
+# Restart aplikasi
+pm2 start farmforce-dashboard
+```
+
+### Post-Update Verification Checklist
+
+- [ ] Aplikasi berjalan tanpa error (`pm2 status`)
+- [ ] Upload CSV comma-delimited berhasil
+- [ ] Upload CSV semicolon-delimited berhasil
+- [ ] Data muncul di dashboard dengan benar
+- [ ] Filter dan chart berfungsi normal
+- [ ] No error di logs (`pm2 logs farmforce-dashboard`)
+- [ ] Nginx serving aplikasi dengan baik
+- [ ] Response time normal (check di browser DevTools)
+- [ ] Database query performa baik
+
+### Common Issues After Update
+
+#### 1. Build Error karena Dependencies
+
+```bash
+# Clear cache dan reinstall
+rm -rf node_modules
+rm package-lock.json
+npm cache clean --force
+npm install
+npm run build
+```
+
+#### 2. PM2 Process Tidak Start
+
+```bash
+# Delete and recreate PM2 process
+pm2 delete farmforce-dashboard
+pm2 start npm --name "farmforce-dashboard" -- start
+pm2 save
+```
+
+#### 3. Upload Masih Error
+
+```bash
+# Check file upload size limit di Nginx
+sudo nano /etc/nginx/nginx.conf
+
+# Tambahkan di http block jika belum ada:
+client_max_body_size 50M;
+
+# Restart Nginx
+sudo systemctl restart nginx
+```
+
+#### 4. Delimiter Detection Tidak Akurat
+
+```bash
+# Check logs untuk melihat delimiter yang terdeteksi
+pm2 logs farmforce-dashboard | grep -i "delimiter"
+
+# Jika masih salah, file CSV mungkin memiliki format yang tidak standar
+# Test manual dengan sample data
+```
+
+### Environment-Specific Notes
+
+#### Development/Staging
+```bash
+# Set NODE_ENV ke development untuk lebih banyak logs
+nano .env
+# Set: NODE_ENV=development
+
+pm2 restart farmforce-dashboard
+```
+
+#### Production
+```bash
+# Pastikan NODE_ENV adalah production
+nano .env
+# Set: NODE_ENV=production
+
+pm2 restart farmforce-dashboard
+```
+
+### Performance Optimization After Update
+
+```bash
+# 1. Clear old logs
+pm2 flush
+
+# 2. Optimize PM2
+pm2 optimize
+
+# 3. Check memory usage
+pm2 list
+
+# 4. Jika memory tinggi, consider restart regular schedule
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 7
+```
+
+### Update Notification untuk User
+
+Setelah update selesai, informasikan ke user:
+
+**Perubahan Penting:**
+1. ✅ Upload CSV sekarang support delimiter comma (,) DAN semicolon (;)
+2. ✅ Auto-detect header - bisa upload CSV dengan atau tanpa header
+3. ✅ Parsing lebih akurat untuk file ORIGIN dan ORBIT
+4. ✅ Error handling lebih baik dengan log yang informatif
+
+**Yang Perlu Diperhatikan:**
+- File CSV yang dulu gagal upload sekarang bisa dicoba lagi
+- Delimiter otomatis terdeteksi, tidak perlu convert format
+- Jika ada data lama yang salah, bisa di-delete dan upload ulang
+
+---
+
+## �🔍 Troubleshooting
 
 ### Port sudah digunakan
 
