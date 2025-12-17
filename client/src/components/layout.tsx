@@ -13,7 +13,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import logo from "@assets/farmforce_logo_1765810103435.png";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -23,14 +22,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const NavContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       <div className="p-6">
-        <div className="flex items-center gap-2 mb-8">
-          <img 
-            src={logo}
-            alt="Farmforce" 
-            className="h-8 w-auto object-contain"
-          />
-        </div>
-        
         <div className="space-y-1">
           <Link href="/">
             <Button 
@@ -71,11 +62,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Sidebar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b p-4 flex items-center justify-between">
-        <img 
-          src={logo}
-          alt="Farmforce" 
-          className="h-6 w-auto object-contain"
-        />
+        <h1 className="text-lg font-bold">FOOD Report</h1>
         <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon">

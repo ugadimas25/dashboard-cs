@@ -36,9 +36,12 @@ export async function getDashboardData(req: Request, res: Response) {
     
     const table = source === 'orbit' ? orbitRaw : originRaw;
     
+    const monthInt = parseInt(month as string);
+    const yearInt = parseInt(year as string);
+    
     // Build date filter for summary_period
-    const periodFilter = sql`EXTRACT(MONTH FROM ${table.summary_period}) = ${month} 
-                             AND EXTRACT(YEAR FROM ${table.summary_period}) = ${year}`;
+    const periodFilter = sql`EXTRACT(MONTH FROM ${table.summary_period}) = ${monthInt} 
+                             AND EXTRACT(YEAR FROM ${table.summary_period}) = ${yearInt}`;
     
     const data = await db
       .select()
@@ -66,19 +69,17 @@ export async function getDashboardStats(req: Request, res: Response) {
       return res.status(400).json({ error: 'Month and year are required' });
     }
     
+    const monthInt = parseInt(month as string);
+    const yearInt = parseInt(year as string);
+    
     const periodFilter = (table: any) => 
-      sql`EXTRACT(MONTH FROM ${table.summary_period}) = ${month} 
-          AND EXTRACT(YEAR FROM ${table.summary_period}) = ${year}`;
+      sql`EXTRACT(MONTH FROM ${table.summary_period}) = ${monthInt} 
+          AND EXTRACT(YEAR FROM ${table.summary_period}) = ${yearInt}`;
     
     if (source === 'orbit') {
       const stats = await db
         .select({
-          totalFarmers: sql<number>`SUM(${orbitRaw.Total_Farmers})`,
-          totalFields: sql<number>`SUM(${orbitRaw.Total_Fields})`,
-          totalWebUsers: sql<number>`SUM(${orbitRaw.Total_Web_Users})`,
-          totalMobileUsers: sql<number>`SUM(${orbitRaw.Total_Mobile_Users})`,
-          totalTrainings: sql<number>`SUM(${orbitRaw.Trainings})`,
-          totalSurveys: sql<number>`SUM(${orbitRaw.Survey_Reponses})`,
+          totalRows: sql<number>`COUNT(*)`,
         })
         .from(orbitRaw)
         .where(periodFilter(orbitRaw));
@@ -89,16 +90,7 @@ export async function getDashboardStats(req: Request, res: Response) {
     // Origin stats
     const stats = await db
       .select({
-        totalActiveFarmers: sql<number>`SUM(${originRaw.Active_Farmers})`,
-        totalInactiveFarmers: sql<number>`SUM(${originRaw.Inactive_Farmers})`,
-        totalMappedFields: sql<number>`SUM(${originRaw.Mapped_Fields})`,
-        totalUnmappedFields: sql<number>`SUM(${originRaw.Unmapped_Fields})`,
-        totalHarvestBags: sql<number>`SUM(${originRaw.Harvest_Bags})`,
-        totalPurchasedBags: sql<number>`SUM(${originRaw.Purchased_Bags})`,
-        totalTrainings: sql<number>`SUM(${originRaw.Trainings})`,
-        totalSurveys: sql<number>`SUM(${originRaw.Survey_Responses})`,
-        totalWebUsers: sql<number>`SUM(${originRaw.Web_Billable_Users})`,
-        totalMobileUsers: sql<number>`SUM(${originRaw.Mobile_Billable_Users})`,
+        totalRows: sql<number>`COUNT(*)`,
       })
       .from(originRaw)
       .where(periodFilter(originRaw));

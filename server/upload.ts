@@ -4,6 +4,10 @@ import { originRaw, orbitRaw } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
 import { Readable } from "stream";
+import { sql } from "drizzle-orm";
+import pg from "pg";
+
+const { Pool } = pg;
 
 // Configure multer for memory storage
 export const upload = multer({
@@ -106,6 +110,35 @@ export async function uploadCSV(req: Request, res: Response) {
       return res.status(400).json({ error: 'No data found in CSV file' });
     }
 
+    // Extract month and year from date
+    const uploadDate = new Date(summaryPeriod);
+    const uploadMonth = uploadDate.getMonth() + 1; // 1-12
+    const uploadYear = uploadDate.getFullYear();
+
+    // Delete existing data for the same month and year using direct pool query
+    const tableName = source === 'origin' ? 'origin_raw' : 'orbit_raw';
+    
+    try {
+      // Create a new pool client for raw query
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+      });
+      
+      const deleteQuery = `
+        DELETE FROM ${tableName}
+        WHERE EXTRACT(MONTH FROM summary_period) = $1
+        AND EXTRACT(YEAR FROM summary_period) = $2
+      `;
+      
+      console.log(`Executing delete for ${tableName}: month=${uploadMonth}, year=${uploadYear}`);
+      const deleteResult = await pool.query(deleteQuery, [uploadMonth, uploadYear]);
+      console.log(`Deleted ${deleteResult.rowCount} existing records for ${uploadMonth}/${uploadYear}`);
+      await pool.end();
+    } catch (deleteError) {
+      console.error('Delete error:', deleteError);
+      throw deleteError;
+    }
+
     // Insert data based on source
     let insertedCount = 0;
 
@@ -164,7 +197,7 @@ export async function uploadCSV(req: Request, res: Response) {
 
     res.json({
       success: true,
-      message: `Successfully uploaded ${insertedCount} records for ${source}`,
+      message: `Successfully uploaded ${insertedCount} records for ${source} (replaced data for ${uploadMonth}/${uploadYear})`,
       count: insertedCount,
       period: date
     });

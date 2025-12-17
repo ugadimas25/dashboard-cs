@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,35 +6,25 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowUpDown, ChevronLeft, ChevronRight, Search, Upload, FileUp, CalendarIcon } from 'lucide-react';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Upload, FileUp, CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
 type DataSource = 'origin' | 'orbit';
-type SortDirection = 'asc' | 'desc' | null;
 
 export default function DashboardV2() {
   const [dataSource, setDataSource] = useState<DataSource>('origin');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadDate, setUploadDate] = useState<Date | undefined>(undefined);
   const [detectedSource, setDetectedSource] = useState<'origin' | 'orbit' | null>(null);
-  const [chartGroupBy, setChartGroupBy] = useState<'country' | 'customer'>('country');
-  const [chartMetric, setChartMetric] = useState<'farmers' | 'fields' | 'users'>('farmers');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const itemsPerPage = 10;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -50,26 +40,27 @@ export default function DashboardV2() {
 
   // Extract unique months and years
   const availableYears = periods
-    ? [...new Set(periods.map((p: any) => new Date(p.summary_period).getFullYear()))]
-        .sort((a, b) => b - a)
+    ? Array.from(new Set(periods.map((p: any) => new Date(p.summary_period).getFullYear()))) as number[]
     : [];
 
+  const sortedYears = availableYears.sort((a, b) => b - a);
+
   const availableMonths = periods && selectedYear
-    ? [
-        ...new Set(
+    ? (Array.from(
+        new Set(
           periods
             .filter((p: any) => new Date(p.summary_period).getFullYear() === parseInt(selectedYear))
             .map((p: any) => new Date(p.summary_period).getMonth() + 1)
-        ),
-      ].sort((a, b) => a - b)
+        )
+      ) as number[]).sort((a, b) => a - b)
     : [];
 
   // Set default year and month when periods load
   useEffect(() => {
-    if (availableYears.length > 0 && !selectedYear) {
-      setSelectedYear(availableYears[0].toString());
+    if (sortedYears.length > 0 && !selectedYear) {
+      setSelectedYear(sortedYears[0].toString());
     }
-  }, [availableYears, selectedYear]);
+  }, [sortedYears, selectedYear]);
 
   useEffect(() => {
     if (availableMonths.length > 0 && !selectedMonth) {
@@ -91,126 +82,10 @@ export default function DashboardV2() {
     enabled: !!selectedMonth && !!selectedYear,
   });
 
-  // Fetch dashboard data
-  const { data: dashboardData, isLoading: dataLoading } = useQuery({
-    queryKey: ['dashboard-data', dataSource, selectedMonth, selectedYear],
-    queryFn: async () => {
-      if (!selectedMonth || !selectedYear) return null;
-      const res = await fetch(
-        `/api/dashboard/data?source=${dataSource}&month=${selectedMonth}&year=${selectedYear}`
-      );
-      if (!res.ok) throw new Error('Failed to fetch data');
-      return res.json();
-    },
-    enabled: !!selectedMonth && !!selectedYear,
-  });
-
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
-
-  // Filtered and sorted data
-  const filteredAndSortedData = useMemo(() => {
-    if (!dashboardData?.data) return [];
-    
-    let filtered = dashboardData.data.filter((row: any) => {
-      const searchLower = searchTerm.toLowerCase();
-      return Object.values(row).some(val => 
-        String(val).toLowerCase().includes(searchLower)
-      );
-    });
-
-    if (sortColumn && sortDirection) {
-      filtered = [...filtered].sort((a: any, b: any) => {
-        const aVal = a[sortColumn];
-        const bVal = b[sortColumn];
-        
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-        }
-        
-        const aStr = String(aVal || '');
-        const bStr = String(bVal || '');
-        return sortDirection === 'asc' 
-          ? aStr.localeCompare(bStr)
-          : bStr.localeCompare(aStr);
-      });
-    }
-
-    return filtered;
-  }, [dashboardData?.data, searchTerm, sortColumn, sortDirection]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
-  const paginatedData = filteredAndSortedData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, sortColumn, sortDirection, dataSource, selectedMonth, selectedYear]);
-
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      setSortDirection(
-        sortDirection === 'asc' ? 'desc' : sortDirection === 'desc' ? null : 'asc'
-      );
-      if (sortDirection === 'desc') setSortColumn(null);
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  // Chart data with dynamic grouping and metrics
-  const chartData = useMemo(() => {
-    if (!dashboardData?.data || dashboardData.data.length === 0) return [];
-    
-    const groupMap = new Map();
-    
-    dashboardData.data.forEach((row: any) => {
-      let groupKey: string;
-      
-      // Determine group key based on selection
-      if (chartGroupBy === 'country') {
-        groupKey = (dataSource === 'orbit' ? 'N/A' : row.Country_Name) || 'Unknown';
-      } else {
-        groupKey = row.Customer_Name || 'Unknown';
-      }
-      
-      if (!groupMap.has(groupKey)) {
-        groupMap.set(groupKey, {
-          name: groupKey.substring(0, 30),
-          farmers: 0,
-          fields: 0,
-          users: 0,
-        });
-      }
-      
-      const entry = groupMap.get(groupKey);
-      
-      // Add metrics based on data source
-      if (dataSource === 'orbit') {
-        entry.farmers += row.Total_Farmers || 0;
-        entry.fields += row.Total_Fields || 0;
-        entry.users += row.Total_Web_Users || 0;
-      } else {
-        entry.farmers += row.Active_Farmers || 0;
-        entry.fields += row.Mapped_Fields || 0;
-        entry.users += row.Web_Billable_Users || 0;
-      }
-    });
-    
-    // Sort by selected metric and return top 10
-    return Array.from(groupMap.values())
-      .sort((a, b) => b[chartMetric] - a[chartMetric])
-      .slice(0, 10);
-  }, [dashboardData, dataSource, chartGroupBy, chartMetric]);
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
 
   // Auto-detect source from filename
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,7 +154,6 @@ export default function DashboardV2() {
       
       // Invalidate all queries
       queryClient.invalidateQueries({ queryKey: ['periods'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     },
     onError: (error: Error) => {
@@ -296,8 +170,8 @@ export default function DashboardV2() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Farmforce Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Monitor and analyze your farm data</p>
+            <h1 className="text-3xl font-bold tracking-tight">Upload FOOD Report Files</h1>
+            <p className="text-muted-foreground mt-1">Monitor and analyze your data</p>
           </div>
           <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
             <DialogTrigger asChild>
@@ -317,28 +191,49 @@ export default function DashboardV2() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="upload-date">Summary Period Date</Label>
+                  <Label htmlFor="upload-date" className="text-base font-semibold">Summary Period Date</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         id="upload-date"
                         variant="outline"
-                        className="w-full justify-start text-left font-normal"
+                        className="w-full justify-start text-left font-normal h-14 text-base border-2 hover:border-primary transition-colors"
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {uploadDate ? format(uploadDate, 'PPP') : <span>Pick a date</span>}
+                        <CalendarIcon className="mr-3 h-5 w-5" />
+                        {uploadDate ? format(uploadDate, 'MMMM dd, yyyy') : <span className="text-muted-foreground">Pick a date</span>}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={uploadDate}
-                        onSelect={setUploadDate}
-                        initialFocus
-                      />
+                    <PopoverContent className="w-auto p-0" align="center" sideOffset={8}>
+                      <div className="p-6 bg-white rounded-xl shadow-2xl border">
+                        <Calendar
+                          mode="single"
+                          selected={uploadDate}
+                          onSelect={setUploadDate}
+                          initialFocus
+                          classNames={{
+                            months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+                            month: "space-y-4",
+                            caption: "flex justify-center pt-1 relative items-center mb-4",
+                            caption_label: "text-xl font-bold",
+                            nav: "space-x-1 flex items-center",
+                            nav_button: "h-10 w-10 bg-transparent p-0 hover:bg-primary/10 rounded-lg",
+                            table: "w-full border-collapse space-y-1",
+                            head_row: "flex mb-2",
+                            head_cell: "text-muted-foreground rounded-md w-14 font-semibold text-sm uppercase",
+                            row: "flex w-full mt-2",
+                            cell: "h-14 w-14 text-center text-base p-0 relative focus-within:relative focus-within:z-20",
+                            day: "h-14 w-14 p-0 font-semibold text-base hover:bg-primary/10 hover:rounded-xl transition-all duration-200",
+                            day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground rounded-xl font-bold",
+                            day_today: "bg-accent text-accent-foreground rounded-xl font-bold",
+                            day_outside: "text-muted-foreground opacity-30",
+                            day_disabled: "text-muted-foreground opacity-50",
+                            day_hidden: "invisible",
+                          }}
+                        />
+                      </div>
                     </PopoverContent>
                   </Popover>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     This date will be saved to the summary_period column
                   </p>
                 </div>
@@ -426,7 +321,7 @@ export default function DashboardV2() {
                   <SelectValue placeholder="Select year" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableYears.map((year) => (
+                  {sortedYears.map((year: number) => (
                     <SelectItem key={year} value={year.toString()}>
                       {year}
                     </SelectItem>
@@ -443,7 +338,7 @@ export default function DashboardV2() {
                   <SelectValue placeholder="Select month" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableMonths.map((month) => (
+                  {availableMonths.map((month: number) => (
                     <SelectItem key={month} value={month.toString()}>
                       {monthNames[month - 1]}
                     </SelectItem>
@@ -456,369 +351,28 @@ export default function DashboardV2() {
 
         {/* Statistics Cards */}
         {statsLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-16" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : stats?.stats ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {dataSource === 'orbit' ? (
-              <>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Total Farmers</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalFarmers?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Total Fields</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalFields?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Total Web Users</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalWebUsers?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Total Mobile Users</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalMobileUsers?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
-              <>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Active Farmers</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalActiveFarmers?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Mapped Fields</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalMappedFields?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Harvest Bags</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalHarvestBags?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>Trainings</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{stats.stats.totalTrainings?.toLocaleString() || 0}</div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-          </div>
-        ) : null}
-
-        {/* Charts Section */}
-        {!dataLoading && chartData.length > 0 && (
-          <div className="space-y-4">
-            {/* Chart Controls */}
+          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1 max-w-sm">
             <Card>
-              <CardHeader>
-                <CardTitle>Chart Configuration</CardTitle>
-                <CardDescription>Customize chart grouping and metrics</CardDescription>
+              <CardHeader className="pb-2">
+                <Skeleton className="h-4 w-24" />
               </CardHeader>
-              <CardContent className="flex gap-4 flex-wrap">
-                <div className="space-y-2 flex-1 min-w-[200px]">
-                  <label className="text-sm font-medium">Group By</label>
-                  <Select value={chartGroupBy} onValueChange={(val: 'country' | 'customer') => setChartGroupBy(val)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="country">Country{dataSource === 'orbit' ? ' (N/A for Orbit)' : ''}</SelectItem>
-                      <SelectItem value="customer">Customer Name</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2 flex-1 min-w-[200px]">
-                  <label className="text-sm font-medium">Metric</label>
-                  <Select value={chartMetric} onValueChange={(val: 'farmers' | 'fields' | 'users') => setChartMetric(val)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="farmers">{dataSource === 'orbit' ? 'Total Farmers' : 'Active Farmers'}</SelectItem>
-                      <SelectItem value="fields">{dataSource === 'orbit' ? 'Total Fields' : 'Mapped Fields'}</SelectItem>
-                      <SelectItem value="users">{dataSource === 'orbit' ? 'Total Web Users' : 'Web Billable Users'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
               </CardContent>
             </Card>
-
-            {/* Charts */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top 10 by {chartMetric === 'farmers' ? 'Farmers' : chartMetric === 'fields' ? 'Fields' : 'Users'}</CardTitle>
-                  <CardDescription>Grouped by {chartGroupBy === 'country' ? 'Country' : 'Customer'}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="name" 
-                        angle={-45}
-                        textAnchor="end"
-                        height={100}
-                        fontSize={12}
-                      />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar 
-                        dataKey={chartMetric} 
-                        fill="#8884d8" 
-                        name={chartMetric === 'farmers' ? 'Farmers' : chartMetric === 'fields' ? 'Fields' : 'Users'}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Distribution by {chartMetric === 'farmers' ? 'Farmers' : chartMetric === 'fields' ? 'Fields' : 'Users'}</CardTitle>
-                  <CardDescription>Pie chart grouped by {chartGroupBy === 'country' ? 'Country' : 'Customer'}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey={chartMetric}
-                      >
-                        {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
           </div>
-        )}
-
-        {/* Data Table */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>{dataSource === 'orbit' ? 'Orbit' : 'Origin'} Data</CardTitle>
-                <CardDescription>
-                  Showing {paginatedData.length} of {filteredAndSortedData.length} records
-                  {selectedMonth && ` for ${monthNames[parseInt(selectedMonth) - 1]} ${selectedYear}`}
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8 w-[250px]"
-                  />
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {dataLoading ? (
-              <Skeleton className="h-64 w-full" />
-            ) : paginatedData.length > 0 ? (
-              <>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {dataSource === 'orbit' ? (
-                          <>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Customer_Name')} className="h-8 px-2">
-                                Customer Name
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Total_Farmers')} className="h-8 px-2">
-                                Total Farmers
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Total_Fields')} className="h-8 px-2">
-                                Total Fields
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Total_Billable_Web_Users')} className="h-8 px-2">
-                                Web Users
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Total_Billable_Mobile_Users')} className="h-8 px-2">
-                                Mobile Users
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Trainings')} className="h-8 px-2">
-                                Trainings
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                          </>
-                        ) : (
-                          <>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Customer_Name')} className="h-8 px-2">
-                                Customer Name
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Country_Name')} className="h-8 px-2">
-                                Country
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Active_Farmers')} className="h-8 px-2">
-                                Active Farmers
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Mapped_Fields')} className="h-8 px-2">
-                                Mapped Fields
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Web_Billable_Users')} className="h-8 px-2">
-                                Web Users
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                            <TableHead>
-                              <Button variant="ghost" onClick={() => handleSort('Mobile_Billable_Users')} className="h-8 px-2">
-                                Mobile Users
-                                <ArrowUpDown className="ml-2 h-4 w-4" />
-                              </Button>
-                            </TableHead>
-                          </>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedData.map((row: any, idx: number) => (
-                        <TableRow key={idx}>
-                          {dataSource === 'orbit' ? (
-                            <>
-                              <TableCell className="font-medium">{row.Customer_Name}</TableCell>
-                              <TableCell>{row.Total_Farmers?.toLocaleString()}</TableCell>
-                              <TableCell>{row.Total_Fields?.toLocaleString()}</TableCell>
-                              <TableCell>{row.Total_Billable_Web_Users?.toLocaleString()}</TableCell>
-                              <TableCell>{row.Total_Billable_Mobile_Users?.toLocaleString()}</TableCell>
-                              <TableCell>{row.Trainings?.toLocaleString()}</TableCell>
-                            </>
-                          ) : (
-                            <>
-                              <TableCell className="font-medium">{row.Customer_Name}</TableCell>
-                              <TableCell>{row.Country_Name}</TableCell>
-                              <TableCell>{row.Active_Farmers?.toLocaleString()}</TableCell>
-                              <TableCell>{row.Mapped_Fields?.toLocaleString()}</TableCell>
-                              <TableCell>{row.Web_Billable_Users?.toLocaleString()}</TableCell>
-                              <TableCell>{row.Mobile_Billable_Users?.toLocaleString()}</TableCell>
-                            </>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Pagination Controls */}
-                <div className="flex items-center justify-between px-2 py-4">
-                  <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                {searchTerm ? 'No results found' : 'No data available for the selected period'}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        ) : stats?.stats ? (
+          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1 max-w-sm">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Total Row</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.stats.totalRows?.toLocaleString() || 0}</div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
       </div>
     </Layout>
   );

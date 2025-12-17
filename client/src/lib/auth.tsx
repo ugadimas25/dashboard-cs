@@ -26,6 +26,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser({ email, name: "Haryadi Santoso" });
       setLocation("/");
       return true;
+    } else if (email === "m.fadli@sustainit.id" && pass === "dbcs2025!") {
+      setUser({ email, name: "M. Fadli" });
+      setLocation("/");
+      return true;
     } else {
       toast({
         variant: "destructive",

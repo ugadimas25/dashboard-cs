@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import logo from "@assets/farmforce_logo_1765810103435.png";
 
 export default function Login() {
   const { login } = useAuth();
@@ -24,13 +23,6 @@ export default function Login() {
     <div className="min-h-screen w-full flex items-center justify-center bg-muted/30 p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center justify-center text-center space-y-2">
-          <div className="w-full flex justify-center mb-4">
-            <img 
-              src={logo}
-              alt="Farmforce" 
-              className="h-12 w-auto object-contain"
-            />
-          </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Welcome back
           </h1>
